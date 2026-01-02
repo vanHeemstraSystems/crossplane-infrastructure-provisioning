@@ -1,1 +1,237 @@
+---
+# Azure PostgreSQL Database Composition
+# Implements XDatabaseInstance for Azure using Flexible Server
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xdatabaseinstances.azure
+  labels:
+    provider: azure
+    database: postgresql
+spec:
+  compositeTypeRef:
+    apiVersion: database.example.com/v1alpha1
+    kind: XDatabaseInstance
+  
+  mode: Pipeline
+  pipeline:
+  - step: patch-and-transform
+    functionRef:
+      name: function-patch-and-transform
+    input:
+      apiVersion: pt.fn.crossplane.io/v1beta1
+      kind: Resources
+      resources:
+      
+      # Resource Group
+      - name: resourcegroup
+        base:
+          apiVersion: azure.upbound.io/v1beta1
+          kind: ResourceGroup
+          spec:
+            forProvider:
+              location: westeurope
+              tags:
+                ManagedBy: Crossplane
+                Purpose: Database
+        patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.location
+          toFieldPath: spec.forProvider.location
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.environment
+          toFieldPath: spec.forProvider.tags["Environment"]
+        - type: CombineFromComposite
+          combine:
+            variables:
+            - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "rg-%s"
+          toFieldPath: metadata.name
+      
+      # PostgreSQL Flexible Server
+      - name: postgresql-server
+        base:
+          apiVersion: dbforpostgresql.azure.upbound.io/v1beta1
+          kind: FlexibleServer
+          spec:
+            forProvider:
+              administratorLogin: dbadmin
+              administratorPasswordSecretRef:
+                name: db-password
+                namespace: crossplane-system
+                key: password
+              skuName: B_Standard_B1ms
+              storageMb: 32768
+              version: "14"
+              zone: "1"
+              resourceGroupNameSelector:
+                matchControllerRef: true
+              delegatedSubnetIdSelector:
+                matchControllerRef: true
+              privateDnsZoneIdSelector:
+                matchControllerRef: true
+              tags:
+                ManagedBy: Crossplane
+        patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.location
+          toFieldPath: spec.forProvider.location
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.engineVersion
+          toFieldPath: spec.forProvider.version
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.environment
+          toFieldPath: spec.forProvider.tags["Environment"]
+        # Map size to SKU
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.size
+          toFieldPath: spec.forProvider.skuName
+          transforms:
+          - type: map
+            map:
+              small: B_Standard_B1ms
+              medium: GP_Standard_D2s_v3
+              large: MO_Standard_E4s_v3
+        # Map size to storage
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.size
+          toFieldPath: spec.forProvider.storageMb
+          transforms:
+          - type: map
+            map:
+              small: 32768    # 32 GB
+              medium: 131072  # 128 GB
+              large: 524288   # 512 GB
+        # Override storage if explicitly specified
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.storageGB
+          toFieldPath: spec.forProvider.storageMb
+          transforms:
+          - type: math
+            math:
+              multiply: 1024
+        # Set backup retention
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.backupRetentionDays
+          toFieldPath: spec.forProvider.backupRetentionDays
+        # High availability for prod
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.highAvailability
+          toFieldPath: spec.forProvider.highAvailability[0].mode
+          transforms:
+          - type: map
+            map:
+              true: ZoneRedundant
+              false: Disabled
+        - type: CombineFromComposite
+          combine:
+            variables:
+            - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "psql-%s"
+          toFieldPath: metadata.name
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.atProvider.fqdn
+          toFieldPath: status.endpoint
+        - type: ToCompositeFieldPath
+          fromFieldPath: status.atProvider.id
+          toFieldPath: status.serverId
+      
+      # Database within the server
+      - name: database
+        base:
+          apiVersion: dbforpostgresql.azure.upbound.io/v1beta1
+          kind: FlexibleServerDatabase
+          spec:
+            forProvider:
+              charset: UTF8
+              collation: en_US.utf8
+              serverIdSelector:
+                matchControllerRef: true
+        patches:
+        - type: CombineFromComposite
+          combine:
+            variables:
+            - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s-db"
+          toFieldPath: metadata.name
+      
+      # Private DNS Zone for private networking
+      - name: private-dns-zone
+        base:
+          apiVersion: network.azure.upbound.io/v1beta1
+          kind: PrivateDNSZone
+          spec:
+            forProvider:
+              resourceGroupNameSelector:
+                matchControllerRef: true
+        patches:
+        - type: CombineFromComposite
+          combine:
+            variables:
+            - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "%s.postgres.database.azure.com"
+          toFieldPath: spec.forProvider.name
+      
+      # Virtual Network for private networking
+      - name: vnet
+        base:
+          apiVersion: network.azure.upbound.io/v1beta1
+          kind: VirtualNetwork
+          spec:
+            forProvider:
+              addressSpace:
+              - "10.0.0.0/16"
+              resourceGroupNameSelector:
+                matchControllerRef: true
+              tags:
+                ManagedBy: Crossplane
+        patches:
+        - type: FromCompositeFieldPath
+          fromFieldPath: spec.parameters.location
+          toFieldPath: spec.forProvider.location
+        - type: CombineFromComposite
+          combine:
+            variables:
+            - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "vnet-%s"
+          toFieldPath: metadata.name
+      
+      # Subnet for database (delegated to PostgreSQL)
+      - name: subnet
+        base:
+          apiVersion: network.azure.upbound.io/v1beta1
+          kind: Subnet
+          spec:
+            forProvider:
+              addressPrefixes:
+              - "10.0.1.0/24"
+              virtualNetworkNameSelector:
+                matchControllerRef: true
+              resourceGroupNameSelector:
+                matchControllerRef: true
+              delegation:
+              - name: PostgreSQLFlexibleServerDelegation
+                serviceDelegation:
+                - name: Microsoft.DBforPostgreSQL/flexibleServers
+                  actions:
+                  - Microsoft.Network/virtualNetworks/subnets/join/action
+        patches:
+        - type: CombineFromComposite
+          combine:
+            variables:
+            - fromFieldPath: metadata.name
+            strategy: string
+            string:
+              fmt: "subnet-%s"
+          toFieldPath: metadata.name
 
