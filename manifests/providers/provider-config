@@ -1,1 +1,77 @@
+---
+# Provider Configuration Secrets Template
+# These secrets contain cloud provider credentials for Crossplane
+
+# ============================================
+# Azure Service Principal Secret
+# ============================================
+# To create this secret:
+# 1. Run: ./scripts/configure-azure-provider.sh
+# OR manually:
+# 1. Create service principal: az ad sp create-for-rbac --name crossplane --role Contributor --scopes /subscriptions/SUBSCRIPTION_ID
+# 2. Create credentials JSON file (see format below)
+# 3. Create secret: kubectl create secret generic azure-secret -n crossplane-system --from-file=creds=./azure-creds.json
+
+# azure-creds.json format:
+# {
+#   "clientId": "00000000-0000-0000-0000-000000000000",
+#   "clientSecret": "your-client-secret",
+#   "subscriptionId": "00000000-0000-0000-0000-000000000000",
+#   "tenantId": "00000000-0000-0000-0000-000000000000",
+#   "activeDirectoryEndpointUrl": "https://login.microsoftonline.com",
+#   "resourceManagerEndpointUrl": "https://management.azure.com/",
+#   "activeDirectoryGraphResourceId": "https://graph.windows.net/",
+#   "sqlManagementEndpointUrl": "https://management.core.windows.net:8443/",
+#   "galleryEndpointUrl": "https://gallery.azure.com/",
+#   "managementEndpointUrl": "https://management.core.windows.net/"
+# }
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: azure-secret
+  namespace: crossplane-system
+type: Opaque
+stringData:
+  creds: |
+    {
+      "clientId": "REPLACE_WITH_YOUR_CLIENT_ID",
+      "clientSecret": "REPLACE_WITH_YOUR_CLIENT_SECRET",
+      "subscriptionId": "REPLACE_WITH_YOUR_SUBSCRIPTION_ID",
+      "tenantId": "REPLACE_WITH_YOUR_TENANT_ID",
+      "activeDirectoryEndpointUrl": "https://login.microsoftonline.com",
+      "resourceManagerEndpointUrl": "https://management.azure.com/",
+      "activeDirectoryGraphResourceId": "https://graph.windows.net/",
+      "sqlManagementEndpointUrl": "https://management.core.windows.net:8443/",
+      "galleryEndpointUrl": "https://gallery.azure.com/",
+      "managementEndpointUrl": "https://management.core.windows.net/"
+    }
+
+---
+# ============================================
+# AWS Credentials Secret
+# ============================================
+# To create this secret:
+# 1. Create AWS IAM user with programmatic access
+# 2. Attach policy: AdministratorAccess or custom policy
+# 3. Generate access keys
+# 4. Create credentials file (see format below)
+# 5. Create secret: kubectl create secret generic aws-secret -n crossplane-system --from-file=creds=./aws-creds.txt
+
+# aws-creds.txt format:
+# [default]
+# aws_access_key_id = YOUR_ACCESS_KEY_ID
+# aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-secret
+  namespace: crossplane-system
+type: Opaque
+stringData:
+  creds: |
+    [default]
+    aws_access_key_id = REPLACE_WITH_YOUR_ACCESS_KEY_ID
+    aws_secret_access_key = REPLACE_WITH_YOUR_SECRET_ACCESS_KEY
 
