@@ -1,1 +1,88 @@
+---
+# Network CompositeResourceDefinition (XRD)
+# Defines the API for provisioning networks across clouds
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xnetworks.network.example.com
+spec:
+  group: network.example.com
+  names:
+    kind: XNetwork
+    plural: xnetworks
+  defaultCompositionRef:
+    name: xnetworks.azure
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              parameters:
+                type: object
+                description: "Network configuration parameters"
+                properties:
+                  cloudProvider:
+                    type: string
+                    description: "Cloud provider: azure, aws, or gcp"
+                    enum:
+                    - azure
+                    - aws
+                    - gcp
+                    default: azure
+                  environment:
+                    type: string
+                    description: "Environment: dev, staging, or prod"
+                    enum:
+                    - dev
+                    - staging
+                    - prod
+                    default: dev
+                  location:
+                    type: string
+                    description: "Cloud region/location"
+                    default: "westeurope"
+                  cidrBlock:
+                    type: string
+                    description: "CIDR block for the network"
+                    default: "10.0.0.0/16"
+                  enableNatGateway:
+                    type: boolean
+                    description: "Enable NAT gateway for private subnets"
+                    default: true
+                required:
+                - cloudProvider
+                - environment
+            required:
+            - parameters
+          status:
+            type: object
+            properties:
+              networkId:
+                type: string
+                description: "Cloud provider network ID"
+              ready:
+                type: boolean
+                description: "Is the network ready for use"
+    additionalPrinterColumns:
+    - name: Provider
+      type: string
+      jsonPath: .spec.parameters.cloudProvider
+    - name: Environment
+      type: string
+      jsonPath: .spec.parameters.environment
+    - name: CIDR
+      type: string
+      jsonPath: .spec.parameters.cidrBlock
+    - name: Ready
+      type: string
+      jsonPath: .status.conditions[?(@.type=='Ready')].status
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp
 
