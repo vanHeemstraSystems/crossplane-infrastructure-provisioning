@@ -1,1 +1,103 @@
+---
+# Storage CompositeResourceDefinition (XRD)
+# Defines the API for provisioning object storage across clouds
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xstoragebuckets.storage.example.com
+spec:
+  group: storage.example.com
+  names:
+    kind: XStorageBucket
+    plural: xstoragebuckets
+  defaultCompositionRef:
+    name: xstoragebuckets.azure
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              parameters:
+                type: object
+                description: "Storage configuration parameters"
+                properties:
+                  cloudProvider:
+                    type: string
+                    description: "Cloud provider: azure, aws, or gcp"
+                    enum:
+                    - azure
+                    - aws
+                    - gcp
+                    default: azure
+                  environment:
+                    type: string
+                    description: "Environment: dev, staging, or prod"
+                    enum:
+                    - dev
+                    - staging
+                    - prod
+                    default: dev
+                  location:
+                    type: string
+                    description: "Cloud region/location"
+                    default: "westeurope"
+                  storageClass:
+                    type: string
+                    description: "Storage tier/class"
+                    enum:
+                    - hot
+                    - cool
+                    - archive
+                    default: hot
+                  versioning:
+                    type: boolean
+                    description: "Enable object versioning"
+                    default: true
+                  encryption:
+                    type: boolean
+                    description: "Enable encryption at rest"
+                    default: true
+                  publicAccess:
+                    type: boolean
+                    description: "Allow public access (not recommended for prod)"
+                    default: false
+                required:
+                - cloudProvider
+                - environment
+            required:
+            - parameters
+          status:
+            type: object
+            properties:
+              bucketName:
+                type: string
+                description: "Storage bucket name"
+              endpoint:
+                type: string
+                description: "Storage endpoint URL"
+              ready:
+                type: boolean
+                description: "Is the storage ready for use"
+    additionalPrinterColumns:
+    - name: Provider
+      type: string
+      jsonPath: .spec.parameters.cloudProvider
+    - name: Environment
+      type: string
+      jsonPath: .spec.parameters.environment
+    - name: Class
+      type: string
+      jsonPath: .spec.parameters.storageClass
+    - name: Ready
+      type: string
+      jsonPath: .status.conditions[?(@.type=='Ready')].status
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp
 
