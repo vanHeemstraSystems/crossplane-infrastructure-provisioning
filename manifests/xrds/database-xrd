@@ -1,1 +1,80 @@
+---
+# Database CompositeResourceDefinition (XRD)
+# Defines the API for provisioning databases across clouds
+# Crossplane v1.15+ - No separate claim needed
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xdatabaseinstances.database.example.com
+spec:
+  group: database.example.com
+  names:
+    kind: XDatabaseInstance
+    plural: xdatabaseinstances
+  # defaultCompositionRef defines which composition to use by default
+  defaultCompositionRef:
+    name: xdatabaseinstances.azure
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              parameters:
+                type: object
+                description: "Database configuration parameters"
+                properties:
+                  size:
+                    type: string
+                    description: "Database size: small, medium, or large"
+                    enum:
+                    - small
+                    - medium
+                    - large
+                    default: small
+                  cloudProvider:
+                    type: string
+                    description: "Cloud provider: azure, aws, or gcp"
+                    enum:
+                    - azure
+                    - aws
+                    - gcp
+                    default: azure
+                  environment:
+                    type: string
+                    description: "Environment: dev, staging, or prod"
+                    enum:
+                    - dev
+                    - staging
+                    - prod
+                    default: dev
+                  location:
+                    type: string
+                    description: "Cloud region/location"
+                    default: "westeurope"
+                  databaseEngine:
+                    type: string
+                    description: "Database engine: postgresql or mysql"
+                    enum:
+                    - postgresql
+                    - mysql
+                    default: postgresql
+                  engineVersion:
+                    type: string
+                    description: "Database engine version"
+                    default: "14"
+                  highAvailability:
+                    type: boolean
+                    description: "Enable high availability (zone redundancy)"
+                    default: false
+                  backupRetentionDays:
+                    type: integer
+                    description: "Backup retention period in days"
+                    minimum: 7
+                    maximum: 90​​​​​​​​​​​​​​​​
 
